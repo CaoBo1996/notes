@@ -143,7 +143,7 @@
                 if (p.hash == hash &&
                         ((k = p.key) == key || (key != null && key.equals(k))))
                     e = p; // 新值替代旧值。否则若if条件不成立，说明对象不相等。则需要将该key-value也插入。
-                else if (p instanceof TreeNode)  // 如果此时头节点（即存放在数组中）为红黑数的节点，那么直接调用函数插入到红黑树中。 
+                else if (p instanceof TreeNode)  // 如果此时头节点（即存放在数组中）为红黑数的节点，那么直接调用函数插入到红黑树中。
                     e = ((TreeNode<K, V>) p).putTreeVal(this, tab, hash, key, value);
                 else {
                     /*
@@ -190,7 +190,7 @@
                 1.待插入的key没有key与之相匹配，那么直接插入这个key-value对，并且直接返回null
                 2.待插入的key有相应的key与之相匹配，那么会进行新值取代旧值，并且将旧值返回。而此时的旧值正好是null
                 */
-            return null; 
+            return null;
         }
         ```
 

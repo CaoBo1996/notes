@@ -126,7 +126,7 @@
                         lock.unlock();
                     }
                 }
-            ``` 
+            ```
 
         3. ``add()``本质上是调用了``offer(e)``函数，而我们直到，如果``offer(e)``入队成功，那么直接返回``true``。否则返回``false``。而在``add()``函数中，在``offer(e)``函数返回``false``的情况下，会直接抛异常。
 
@@ -233,21 +233,21 @@
                     if (o == null) return false;
                     final Object[] items = this.items;
                     final ReentrantLock lock = this.lock;
-                    lock.lock();
+                    lock.lock();  // 获取锁，当获取到了锁，那么此时别的线程是肯定不会执行。因为仅仅只有一个锁对象
                     try {
                         if (count > 0) {
                             final int putIndex = this.putIndex;
                             int i = takeIndex;
-                            do {
+                            do {  // 在队列中，通过while循环来找到与传入的e相等的元素
                                 if (o.equals(items[i])) {
-                                    removeAt(i);
+                                    removeAt(i);  // 找到那么直接移除，返回true。
                                     return true;
                                 }
                                 if (++i == items.length)
                                     i = 0;
                             } while (i != putIndex);
                         }
-                        return false;
+                        return false;  // 找不到，最终返回false。
                     } finally {
                         lock.unlock();
                     }
