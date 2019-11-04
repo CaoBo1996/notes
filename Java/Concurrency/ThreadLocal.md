@@ -1,96 +1,137 @@
 # ThreadLocal源码分析
 
+ThreadLcoal类是线程局部变量类。要创建一个线程局部变量，那么要先实例化一个线程局部变量。
+
 1. 构造函数
 
     ```java
 
         /*
-         1.ThreadLocal并不维护ThreadLocalMap，即不是一个存储数据的容器，可将其看成是一个工具包，ThreadLocal内部有一个静态内部类ThreadLocalMap，这个类实际存储key-value键值对。而ThreadLocal提供了对这个ThreadLocalMap操作的各种方法。新建一个ThreadLocal对象并没有同时创建一个ThreadLocalMap。
-         2.每个线程对象（每个线程对象继承自Thread类）均含有一个ThreadLocalMap类型的成员变量  threadLocals，这个变量指向了属于该线程
-           对象的ThreadLocalMap。而ThreadLocalMap是ThreadLocal类的一个内部类。类似于HashMap，内部有一个Entry的结构。而这个结构是真正存储了key-value映射。
-         3.注意每一个线程对象都有ThreadLocalMap与之相关联，且此时线程对象内部的threadLocals属性指向了这个ThreadLocalMap。不同线程的ThreadLocalMap是相互独立的。而可以创建很多个ThreadLocal。每一个ThreadLocal对象实例即
-         是ThreadLocalMap中Entry中的key，value就是创建这个ThreadLocal类时初始化的值（如果没有初始化或者调用set()函数设置）。
+         1.ThreadLocal类的内部有一个静态内部类ThreadLocalMap，这个类实际存储
+         key-value键值对。而ThreadLocal提供了对这个ThreadLocalMap操作的各种方法。
+
+         2.每个线程对象（所有的线程对象都必须是Thread类或其子类的实例）均含有一个
+         ThreadLocalMap类型的成员变量  threadLocals，即ThreadLocal.ThreadLocalMap threadLocals = null;
+         这个变量指向了属于该线程对象的ThreadLocalMap。而ThreadLocalMap是
+         ThreadLocal类的一个静态内部类。类似于HashMap，ThreadLocalMap内部有一个静态内部类Entry。且继承于类WeakReference。
+         而这个静态内部类Entry是真正存储了key-value映射。（内部成员变量private T referent;存储key，Object value;存储value）
+
+         3.注意每一个线程对象都有ThreadLocalMap与之相关联，且此时线程对象内部的threadLocals属性指向了这个ThreadLocalMap。
+         不同线程对象之间的ThreadLocalMap是相互独立的，从而保证了线程局部变量。
+         但是可以创建很多个ThreadLocal类实例。每一个ThreadLocal对象实例即对应着
+         ThreadLocalMap中Entry中的key（本质上这个key指向了这个ThreadLocal实例对象，且是一个弱引用），value就是
+         创建这个ThreadLocal类的实例时初始化的值（如果没有override初始化函数或者调用set()函数设置，那么第一次get()方法返回null）。
          */
         public ThreadLocal() {
-            //空构造函数，即当创建一个新的ThreadLocal类的时候，并没有创建ThreadLocalMap对象。ThreadLocalMap只有在调用ThreadLocal的相关set(),get()方法时，先检查有没有创建与该线程关联的ThreadLocalMap，即线程对象内部的threadLocals是否为null。
+            /*
+             1.空构造函数，即当创建一个新的ThreadLocal类的实例对象的时候，并
+             没有创建ThreadLocalMap对象。ThreadLocalMap只有在调用ThreadLocal的set(),get()等
+             方法时，先检查有没有创建属于该线程对象的ThreadLocalMap，即线程对象内部的threadLocals成员属性是否为null。
+            */
         }
     ```
 
 2. 重要方法
+    1. ``ThreadLocal``相关方法
 
-    ```java
-        // 可能没经过set()方法调用直接调用get()方法来获取值。这种情况下，会新建一个threadlocalmap。并且将默认的key-value插入。这个默认的key
-        //毫无疑问，是当前threadlcoal对象。这个value是调用initValue()方法来得到的，如果没有重写initValue()方法的话，那么这个initValue()的返回值就是null（但是我们一般会重写这个inintValue()方法）。从而将这个默认键值对插入，并且将value返回。
-        public T get() {
-            Thread t = Thread.currentThread();  // 获取当前线程，不论是主线程还是其他的线程。
-            ThreadLocalMap map = getMap(t);  // 得到该线程的threadLocals，判断是否为null。
-            if (map != null) {  // 如果条件不成立，说明此时还没有初始化对应于该线程的ThreadLocalMap。即此时线程对象的threadLocals属性值为null
-                ThreadLocalMap.Entry e = map.getEntry(this);  // 根据this即key来获取相应的Entry。
-                if (e != null) {  // 这里为什么还要判断e是否为null?因为根据构造函数，只要ThreadLocalMap创建出来，那么相应的Entry即也存在了啊
-                    @SuppressWarnings("unchecked")
-                    T result = (T)e.value;  // 直接获取值，因为
-                    return result;
+        ```java
+            /*
+            1.可能没先调用set()方法调用直接调用get()方法来获取值。这种情况下，会新
+            建一个threadlocalmap。并且将默认的key-value插入。这个默认的key
+            毫无疑问，是当前threadlcoal对象的弱引用。这个value是调用initValue()方法来得
+            到的，如果在创建ThreadLocal实例时没有override initValue()方法的话，那么这个initValue()的
+            返回值就是null（但是我们一般会重写这个inintValue()方法）。
+            */
+            public T get() {
+                Thread t = Thread.currentThread();  // 获取当前线程对象，可能是主线程或者其他的线程
+                ThreadLocalMap map = getMap(t);  // 获取该线程对象的threadLocals实例变量
+                if (map != null) {  // 如果条件不成立，说明此时还没有初始化对应于该线程的ThreadLocalMap。即此时线程对象的threadLocals属性值为null
+                    ThreadLocalMap.Entry e = map.getEntry(this);  // 根据this即key来获取相应的Entry
+                    if (e != null) {  // TODO。这里为什么还要判断e是否为null?
+                        @SuppressWarnings("unchecked")
+                        T result = (T)e.value;  // 直接获取到value并返回
+                        return result;
+                    }
                 }
+                return setInitialValue();  // 该方法调用的情况 1.map为null，2.e为null。即可能没有没有对应于该ThreadLocal实例的Entry（因为发生hash冲突散列到其他地方）
+                /*
+                1.懒汉式初始化。只有当map == null时才会进行初始化操作。即在没有进行set()操作
+                就执行get()操作，那么会返回初始值。这个初始值可以被显示初始化赋值
+
+                2.通过创建ThreadLcoal实例时重写initialValue()函数来进行显示赋值。否则的话返回null
+                */
             }
-            return setInitialValue();  // 懒汉式初始化。只有当map == null时才会进行初始化操作。即在没有进行set()操作就执行get()操作，那么会返回初始值。这个初始值可以被显示初始化赋值
-            //通过重写initialValue()函数来进行显示赋值。否则的化返回null
-        }
 
-        public void set(T value) {
-            Thread t = Thread.currentThread();  // 得到当前线程。因为代码总是在一个线程中。主线程或者是其他线程。
-            ThreadLocalMap map = getMap(t);  // 根据当前线程来获取这个线程threadLocals。而这个threadLocals指向了ThreadLocalMap，注意set方法是被ThreadLocal实例调用的。
-            if (map != null)  // 说明已经初始化，那么直接插入
-                map.set(this, value);  // this指的是当前调用这个set()方法的ThreadLocal的实例。当一个线程多次调用同一个threadLocal实例的set()方法。其实是
-                //新值取代旧值的过程。除非用不同的threadlocal实例来调用这个set()方法。这样的话，就相当于对应于这个线程的threadlocalmap中存放了两个key -value键值对。一个key是第一个threadlocal实例。另外一个key是第二个threadlocal实例。以此类推。
-            else
-                createMap(t, value);  // 说明还没有初始化ThreadLcoalMap。即此时线程中得threadLocals为null。那么新创建map并key-value对写入。
-        }
+            ThreadLocalMap getMap(Thread t) {
+                return t.threadLocals;
+            }
 
-        public void remove() {
-            ThreadLocalMap m = getMap(Thread.currentThread());
-            if (m != null)
-                m.remove(this);
-        }
+            private T setInitialValue() {
+                T value = initialValue();  //注意：initialValue()函数若没有被重写，那么返回值总是null
+                Thread t = Thread.currentThread();
+                ThreadLocalMap map = getMap(t);
+                if (map != null)
+                    map.set(this, value);
+                else
+                    createMap(t, value);
+                return value;
+            }
 
-        protected T initialValue() {
-            return null;  // 该方法一般会被重写。从而可以赋予其默认的初始值。
-        }
+            protected T initialValue() {
+                return null;  // 该方法一般会被重写。从而可以赋予其默认的初始值。
+            }
 
-        private T setInitialValue() {
-            T value = initialValue();  //注意：initialValue()函数若没有被重写，那么返回值总是null
-            Thread t = Thread.currentThread();
-            ThreadLocalMap map = getMap(t);
-            if (map != null)
-                map.set(this, value);
-            else
-                createMap(t, value);
-            return value;
-        }
 
-        void createMap(Thread t, T firstValue) {
-            //创建新的ThreadLocalMap。并将初始key-value对存入到ThreadLocalMap得Entry中。即存放key-value的结构
-            t.threadLocals = new ThreadLocalMap(this, firstValue);  // 返回值赋值给这个线程对象的threadLocals成员属性
-        }
+            public void set(T value) {
+                Thread t = Thread.currentThread();  // 获取当前线程。因为代码总是在一个线程中。主线程或者是其他线程。
+                ThreadLocalMap map = getMap(t);  // 根据当前线程来获取这个线程threadLocals。而这个threadLocals指向了ThreadLocalMap，注意set方法是被ThreadLocal实例调用的。
+                if (map != null)  // 说明已经初始化，那么直接插入
+                    map.set(this, value);
+                    /*
+                    1.this指的是当前调用这个set()方法的ThreadLocal的实例。当一个线程多次调用同一个threadLocal实
+                    例的set()方法。其实是新值取代旧值的过程。除非用不同的threadlocal实例来调用这个set()方法。这样的话，
+                    就相当于对应于这个线程的threadlocalmap中存放了两个key -value键值对。一个key是第一个threadlocal实例。另外一个key是第二个threadlocal实例。以此类推。
+                    */
+                else
+                    createMap(t, value);  // 说明还没有初始化ThreadLcoalMap。即此时线程中得threadLocals为null。那么新创建map并key-value对写入。
+            }
 
-        ThreadLocalMap(ThreadLocal<?> firstKey, Object firstValue) {
-                table = new Entry[INITIAL_CAPACITY];  // 这个一个数组，类比于HashMap中的table。即数组中的每一个元素都是Entry节点
-                int i = firstKey.threadLocalHashCode & (INITIAL_CAPACITY - 1);  // 计算这个key-value散列到数组的位置
-                table[i] = new Entry(firstKey, firstValue);  // 在ThreadLocalMap的构造函数中新初始化一个Entry节点，来存储这个键值对
-                size = 1;
-                setThreshold(INITIAL_CAPACITY);
-        }
+            void createMap(Thread t, T firstValue) {
+                //创建新的ThreadLocalMap。并将初始key-value对存入到ThreadLocalMap得Entry中。即存放key-value的结构
+                t.threadLocals = new ThreadLocalMap(this, firstValue);  // 返回值赋值给这个线程对象的threadLocals成员属性
+            }
 
-        private final int threadLocalHashCode = nextHashCode();
+            //下面是ThreadLocal的remove()方法
+            public void remove() {
+                ThreadLocalMap m = getMap(Thread.currentThread());
+                if (m != null)
+                    m.remove(this);
+            }
 
-        private static int nextHashCode() {
-            return nextHashCode.getAndAdd(HASH_INCREMENT);  // CAS原子性操作。因为这个变量是每一个线程共享的。
-        }
+        ```
 
-        private static AtomicInteger nextHashCode = new AtomicInteger();  // 初始值为0，且是一个静态变量，是属于类的。即每个ThradLocal实例都共享这一份变量
+    2. ``ThreadLocalMap``相关方法
 
-        private static final int HASH_INCREMENT = 0x61c88647;  // 魔法值，属于类变量
+        ```java
+            ThreadLocalMap(ThreadLocal<?> firstKey, Object firstValue) {
+                    table = new Entry[INITIAL_CAPACITY];  // 这个一个数组，类比于HashMap中的table。即数组中的每一个元素都是Entry节点
+                    int i = firstKey.threadLocalHashCode & (INITIAL_CAPACITY - 1);  // 计算这个key-value散列到数组的位置
+                    table[i] = new Entry(firstKey, firstValue);  // 在ThreadLocalMap的构造函数中新初始化一个Entry节点，来存储这个键值对
+                    size = 1;
+                    setThreshold(INITIAL_CAPACITY);
+            }
 
-    ```
+            private final int threadLocalHashCode = nextHashCode();
+
+            private static int nextHashCode() {
+                return nextHashCode.getAndAdd(HASH_INCREMENT);  // CAS原子性操作。因为这个变量是每一个线程共享的。
+            }
+
+            private static AtomicInteger nextHashCode = new AtomicInteger();  // 初始值为0，且是一个静态变量，是属于类的。即每个ThradLocal实例都共享这一份变量
+
+            private static final int HASH_INCREMENT = 0x61c88647;  // 魔法值，属于类变量
+
+        ```
 
 3. ``ThreadLocal``如何进行散列
     + 通过分析``ThreadLocal``的源码，发现散列函数很有意思。说明如下：
@@ -148,11 +189,23 @@
 
             ![代码运行结果](../Image/ResultOfMagicHashCode.png)
             可见，``0x61c88647``能让哈希码能均匀的分布在``2^N``数组里。即对于一个长度位``N``的数组，索引范围为``0-N-1``，每次插入一个``key-value``键值对，都会将此时的``hashcode``（由魔法值累加而来，即是魔法值的``N``倍）与``length-1``进行与运算（``length``表示数组的长度），得到的下标即是该``key-value``对要插入的位置。
+            **新建的ThreadLocal对象都以前一个新建ThreadLocal对象的threadLocalHashCode + 0x61c88647作为为自己的hashcode**
 
             + ``private static final int INITIAL_CAPACITY = 16;``可见，初始数组的大小为``2^4``。且保证每次**扩容**后也是``2^N``。即从而将每个``key``，也即每个实例散列到数组中。注意：每个实例都会有一个``threadLocalHashCode``。这个是在这个实例初始化的时候，便通过调用``private static int nextHashCode();``方法来计算得到的，并且计算后便不能够修改，因为该实例变量是以``final``修饰的。散列时，用该值来与``INITIAL_CAPACITY - 1``进行与运算，来得到索引的下标。
 
             + 如何解决``hash``碰撞
-                + 采用开放地址法来解决``hash``碰撞。即如果插入的当前位置如果已经有了元素，那么即发生了``hash``碰撞。那么直接找下一个索引。
+                + 采用线性探测法来解决``hash``碰撞。即如果插入的当前位置如果已经有了元素，那么即发生了``hash``碰撞。那么直接找下一个索引。
+                + **由于使用了线性探测法，散列表在逻辑上是一个环形结构**
+
+                    ![环形散列表结构图](../Image/EntryOfThreadLocal.png)
+
+                    **说明**：
+                    1. ``slot``:散列表中的一个位置（即``table``数组的一个位置）
+                    2. ``full entry``或``full slot``：说明这个数组的这个位置已经被插入了``Entry``。并且``key``(即弱引用)不为``null``。
+                    3. ``stale slot``或者``stale entry``：表明这个``Entry``所存储的``key``为``null``，即弱引用为``null``
+                    4. ``null slot``：表明这个``table``相应的位置为``null``。即没有``Entry``插入。
+                    5. ``run``：散列表中任意两个``null slot``之间的一段，不包括两端。
+                    6. 注意：数组相应位置为空与``Entry``的``key``为空的区别。
 
                     ```java
                         private void set(ThreadLocal<?> key, Object value) {
@@ -183,8 +236,10 @@
                                 }
                             }
 
-                            tab[i] = new Entry(key, value);
-                            int sz = ++size;
+                            tab[i] = new Entry(key, value);  // 新创建一个节点，将其插入到数组中
+                            int sz = ++size;  // 散列表中Entry的个数
+
+                            //每次调用一次set()方法都会进行一次清理，
                             if (!cleanSomeSlots(i, sz) && sz >= threshold)
                                 rehash();
                         }
@@ -244,7 +299,7 @@
                         + 因为``Entry``里的``key``是对``ThreadLcoal``实例对象的弱引用，所以在实例对象没有其他的强引用时，那么这个实例对象会被垃圾回收，那么此时``Entry``里的弱引用即为``null``，那么如果该线程仍然继续运行，那么这个``Entry``对象里的``Value``就无法得到回收。从而发生内存泄露的现象。**TODO**
 
                 + 引用队列
-                    + 
+                    +
 
 
 4. ``ThreadLocal``简单使用
