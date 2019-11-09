@@ -1,2 +1,2 @@
 # notes
-What i think is important.
+Get busy living or get busy dying.
