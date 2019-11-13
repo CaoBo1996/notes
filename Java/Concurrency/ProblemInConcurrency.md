@@ -27,27 +27,27 @@
                 + 使用``Lock()``实现类显示进行加锁和释放锁。[ReentrantLock()锁的种类](./Lock.md)
 
     2. 内存可见性与指令重排序（参考**Java并发编程实战第3章**）
-    在单线程的环境中，如果向某个变量先写入值，然后在没有其他写入操作的情况下读取这个变量，那么总能得到相同的值。然而，当读操作和写操作在不同的线程中执行，情况可能会出现变化。我们无法确保执行读操作的线程能适时的看到其他线程写入的值。
+        在单线程的环境中，如果向某个变量先写入值，然后在没有其他写入操作的情况下读取这个变量，那么总能得到相同的值。然而，当读操作和写操作在不同的线程中执行，情况可能会出现变化。我们无法确保执行读操作的线程能适时的看到其他线程写入的值。
         1. ``Volatile``关键字分析
 
             ```java
-                public class NoVisibility{
-                    private static boolean ready;
-                    private static int number;
-                    private static class ReaderThread extends Thread{
-                        public void run(){
-                            while(!ready){
-                                Thread.yield();
-                            }
-                            System.out.println(number)
+            public class NoVisibility{
+                private static boolean ready;
+                private static int number;
+                private static class ReaderThread extends Thread{
+                    public void run(){
+                        while(!ready){
+                            Thread.yield();
                         }
-                    }
-                    public static void main(String[] args){
-                        new ReaderThread.start();
-                        number = 42;
-                        ready = true;
+                        System.out.println(number)
                     }
                 }
+                public static void main(String[] args){
+                    new ReaderThread.start();
+                    number = 42;
+                    ready = true;
+                }
+            }
             ```
 
             分析：上述代码可能出现的情况：
@@ -58,28 +58,26 @@
             ![内存模型](../Image/MemoryInCPU.png)
 
         3. ``final``字段抑制重排序
-        规则：
+            规则：
             + 在构造方法内对一个``final``字段的写入不允许被重排序到``构造方法之外``。
-            [测试函数](../../JavaSrc/FinalDemoTest.java)
-            ![可能的时序图](../Image/FinalWrite.jpg)
+                [测试函数](../../JavaSrc/FinalDemoTest.java)
+                ![可能的时序图](../Image/FinalWrite.jpg)
 
-            从上图可以看出，普通字段可能在构造方法完成之后才被真正的写入值，所以另一个线程在访问这个普通变量的时候可能读到了0。但是``final``修饰的字段的赋值不允许被重排序到构造方法完成之后，所以该字段所在的对象的引用被赋值出去之前,``final``字段肯定被赋值过了。
+                从上图可以看出，普通字段可能在构造方法完成之后才被真正的写入值，所以另一个线程在访问这个普通变量的时候可能读到了0。但是``final``修饰的字段的赋值不允许被重排序到构造方法完成之后，所以该字段所在的对象的引用被赋值出去之前,``final``字段肯定被赋值过了。
 
             + 初次读一个包含final字段对象的引用，与随后初次读这个final字段，这两个操作不能重排序。
-            ![可能的时序图](../Image/FinalRead.jpg)
-            从上图可以看出，普通字段的读取操作可能被重排序到读取该字段所在对象引用前边，自然会得到``NullPointerException``异常喽，但是对于``final``字段，在读``final``字段之前，必须保证它前边的读操作都执行完成，也就是说必须先进行该字段所在对象的引用的读取，再读取该字段，也就是说这两个操作不能进行重排序。即**在读一个对象的final域之前，一定会先读这个包含这个final域的对象的引用。**
+                ![可能的时序图](../Image/FinalRead.jpg)
+                从上图可以看出，普通字段的读取操作可能被重排序到读取该字段所在对象引用前边，自然会得到``NullPointerException``异常喽，但是对于``final``字段，在读``final``字段之前，必须保证它前边的读操作都执行完成，也就是说必须先进行该字段所在对象的引用的读取，再读取该字段，也就是说这两个操作不能进行重排序。即**在读一个对象的final域之前，一定会先读这个包含这个final域的对象的引用。**
 
             + 对于引用类型的``final``变量：
-            增加约束：***一个final修饰的对象的成员域的写入，与随后在构造函数之外把这个被构造的对象的引用赋给一个引用变量，这两个操作是不能被重排序的***。
+                增加约束：***一个final修饰的对象的成员域的写入，与随后在构造函数之外把这个被构造的对象的引用赋给一个引用变量，这两个操作是不能被重排序的***。
 
             + ``final``字段一旦被赋值成功，那么它的值在之后的程序执行过程中都不会发生改变，也不存在所谓的**内存可见性**的问题
 
         4. 线程不安全的另外一个例子
 
-        ```java
-            /*
+            ```java
 
-             */
             public class MutableInteger{
                 private int value;
                 public int get(){
@@ -89,81 +87,80 @@
                     this.value = value;  // 设置的值可能不会立马刷新到主内存中
                 }
             }
-        ```
-
+            ```
 
 2. 活跃性
 
     1. 死锁
 
         ```java
-            import java.util.concurrent.TimeUnit;
+        import java.util.concurrent.TimeUnit;
 
-            public class DeadLock {
-                public static void main(String[] args) {
-                    Locks locks = new Locks();
-                    //由于在构造不同的任务的时候，传入的是同一个锁对象，即这两个任务中用到的锁是同两把锁。即lockA,lockB
-                    new Thread(new TargetByThreadOne(locks), "ThreadOne").start();
-                    new Thread(new TargetByThreadTwo(locks), "ThreadTwo").start();
-
-                }
-            }
-
-
-            //锁对象，用来产生锁。
-            class Locks {
-                Object lockA = new Object();
-                Object lockB = new Object();
-            }
-
-            class TargetByThreadOne implements Runnable {
+        public class DeadLock {
+            public static void main(String[] args) {
                 Locks locks = new Locks();
+                //由于在构造不同的任务的时候，传入的是同一个锁对象，即这两个任务中用到的锁是同两把锁。即lockA,lockB
+                new Thread(new TargetByThreadOne(locks), "ThreadOne").start();
+                new Thread(new TargetByThreadTwo(locks), "ThreadTwo").start();
 
-                public TargetByThreadOne(Locks locks) {
-                    this.locks = locks;
-                }
+            }
+        }
 
-                @Override
-                public void run() {
-                    synchronized (locks.lockA) {
-                        System.out.println(Thread.currentThread().getName() + "：获取了lockA锁");
-                        try {
-                            TimeUnit.SECONDS.sleep(5);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                        // 执行到这一步，A锁并没有释放，并且此时去获取B锁，由于之前经过休眠了5秒，在这里Two线程执行，将B锁获取到了，所以此时没法获取B锁
-                        synchronized (locks.lockB) {
-                            System.out.println(Thread.currentThread().getName() + "：获取了lockB锁");
-                        }
+
+        //锁对象，用来产生锁。
+        class Locks {
+            Object lockA = new Object();
+            Object lockB = new Object();
+        }
+
+        class TargetByThreadOne implements Runnable {
+            Locks locks = new Locks();
+
+            public TargetByThreadOne(Locks locks) {
+                this.locks = locks;
+            }
+
+            @Override
+            public void run() {
+                synchronized (locks.lockA) {
+                    System.out.println(Thread.currentThread().getName() + "：获取了lockA锁");
+                    try {
+                        TimeUnit.SECONDS.sleep(5);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
-                }
-            }
-
-            class TargetByThreadTwo implements Runnable {
-                Locks locks = new Locks();
-
-                public TargetByThreadTwo(Locks locks) {
-                    this.locks = locks;
-                }
-
-                @Override
-                public void run() {
-                    // 在A休眠的时候或者刚开始执行的线程是Two，将B锁获取到了。
+                    // 执行到这一步，A锁并没有释放，并且此时去获取B锁，由于之前经过休眠了5秒，在这里Two线程执行，将B锁获取到了，所以此时没法获取B锁
                     synchronized (locks.lockB) {
                         System.out.println(Thread.currentThread().getName() + "：获取了lockB锁");
-                        try {
-                            TimeUnit.SECONDS.sleep(5);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-
-                        synchronized (locks.lockA) {
-                            System.out.println(Thread.currentThread().getName() + "：获取了lockA锁");  // A锁已经被One线程获取
-                        }
                     }
                 }
             }
+        }
+
+        class TargetByThreadTwo implements Runnable {
+            Locks locks = new Locks();
+
+            public TargetByThreadTwo(Locks locks) {
+                this.locks = locks;
+            }
+
+            @Override
+            public void run() {
+                // 在A休眠的时候或者刚开始执行的线程是Two，将B锁获取到了。
+                synchronized (locks.lockB) {
+                    System.out.println(Thread.currentThread().getName() + "：获取了lockB锁");
+                    try {
+                        TimeUnit.SECONDS.sleep(5);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+                    synchronized (locks.lockA) {
+                        System.out.println(Thread.currentThread().getName() + "：获取了lockA锁");  // A锁已经被One线程获取
+                    }
+                }
+            }
+        }
         ```
 
         + 死锁分析：
@@ -172,5 +169,4 @@
     2. 活锁
 
     3. 饥饿
-    线程饥饿是另一种活跃性问题，也可以使程序无法执行下去。如果一个线程因为处理器时间全部被其他线程抢走而得不到处理器运行时间，这种状态被称之为饥饿，一般是由高优先级线程吞噬所有的低优先级线程的处理器时间引起的。java语言在Thread类中提供了修改线程优先级的成员方法setPriority，并且定义了10个优先级级别。不同操作系统有不同的线程优先级，java会把这10个级别映射到具体的操作系统线程优先级上边。操作系统的线程调度会按照自己的调度策略来轮番执行我们定义的线程。我们所设置的线程优先级对操作系统来说只是**一种建议**，当我们尝试提高一个线程的优先级的时候，可能**起不到任何作用**，也可能**使这个线程过度优先执行**，导致别的线程得不到处理器分配的时间片，从而导致饿死。所以我们尽量不要修改线程的优先级，具体效果取决于具体的操作系统，并且可能导致某些线程饿死。
-
+        线程饥饿是另一种活跃性问题，也可以使程序无法执行下去。如果一个线程因为处理器时间全部被其他线程抢走而得不到处理器运行时间，这种状态被称之为饥饿，一般是由高优先级线程吞噬所有的低优先级线程的处理器时间引起的。java语言在Thread类中提供了修改线程优先级的成员方法setPriority，并且定义了10个优先级级别。不同操作系统有不同的线程优先级，java会把这10个级别映射到具体的操作系统线程优先级上边。操作系统的线程调度会按照自己的调度策略来轮番执行我们定义的线程。我们所设置的线程优先级对操作系统来说只是**一种建议**，当我们尝试提高一个线程的优先级的时候，可能**起不到任何作用**，也可能**使这个线程过度优先执行**，导致别的线程得不到处理器分配的时间片，从而导致饿死。所以我们尽量不要修改线程的优先级，具体效果取决于具体的操作系统，并且可能导致某些线程饿死。
