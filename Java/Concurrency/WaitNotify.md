@@ -6,8 +6,8 @@
 
     |状态|说明|
     |:-:|:-:|
-    |``NEW``|``Thread state for a thread which has not yet started``，即新创建了一个线程对象，但是还有没有调用``start()``方法|
-    |``RUNNABLE``|``Java``将线程的就绪（``ready``）和正在运行（``running``）两种状态笼统的称之为``RUNNABLE``。某个线程对创建后，其他线程（比如``main``线程）调用了该线程对象的``start()``，那么此时处于``ready``状态，在此状态下，线程等待被线程调度系统选中，从而获取``CPU``的执行权。``ready``状态的线程在获得``CPU``的时间片后变成正在运行的状态``running``|
+    |``NEW``|``Thread state for a thread which has not yet started``，即新创建了一个线程对象，但是还没有调用``start()``方法|
+    |``RUNNABLE``|``Java``将线程的就绪（``ready``）和正在运行（``running``）两种状态笼统的称之为``RUNNABLE``。某个线程对象创建后，并且调用了实例方法``start()``，那么此时处于``ready``状态，在此状态下，线程等待被线程调度系统选中，从而获取``CPU``的执行权。``ready``状态的线程在获得``CPU``的执行时间片后变成正在运行的状态``running``|
     |``BLOCKED``|表示线程获取锁失败，发生阻塞|
     |``WAITING``|等待其他线程的唤醒|
     |``TIMED_WAITING``|等到指定时间后自动返回|
@@ -18,80 +18,82 @@
     ```java
     public enum State {
         /**
-        * Thread state for a thread which has not yet started.
-        */
-        NEW,  // 所有的线程对象都必须是Thread类或者其子类的实例，当new一个线程实例出来，那么此线程就处于NEW状态。
+         * Thread state for a thread which has not yet started.
+         * 所有的线程对象都必须是Thread类或者其子类的实例，当new一
+         * 个线程实例出来，那么此线程就处于NEW状态。
+         */
+        NEW,  //
 
         /**
-        * Thread state for a runnable thread.  A thread in the runnable
-        * state is executing in the Java virtual machine but it may
-        * be waiting for other resources from the operating system
-        * such as processor.
-        */
+         * Thread state for a runnable thread.  A thread in the runnable
+         * state is executing in the Java virtual machine but it may
+         * be waiting for other resources from the operating system
+         * such as processor.
+         */
 
         /**
-        * 1.当线程对象调用自己的实例方法start()，那么此时线程就处于RUNNABLE状态，即线程在可运行线程池中。而RUNNABLE状态又可以细分为就绪状态和运行状态
-        * 2.处于就绪状态的线程，说明有资格运行，但是要等待调度，等待的是系统资源，CPU时间片等。但是必须要等到线程调度程序选中该线程，该线程才能执行，从而进入到运行状态。
-        * 3.当线程获取同步锁失败，线程进入到阻塞状态
-        * 4.在wait状态的线程被唤醒后，如果线程获得了执行权，说明线程进入到RUNNABLE状态，此时如果正在执行的线程时间片用完了，但还没获取到锁，而该线程获取到了时间片，那么会进入到获取锁失败的阻塞状态
-        */
+         * 1.当线程对象调用自己的实例方法start()后，那么此时线程就处
+         * 于RUNNABLE状态，即线程在可运行线程池中。而RUNNABLE状态又
+         * 可以细分为就绪状态和运行状态
+         * 2.处于就绪状态的线程，说明有资格运行，但是要等待线程调度，等待的
+         * 是系统资源，CPU时间片等。但是必须要等到线程调度程序选中该线程，该
+         * 线程才能执行，从而进入到运行状态。
+         */
         RUNNABLE,
 
         /**
-        * Thread state for a thread blocked waiting for a monitor lock.
-        * A thread in the blocked state is waiting for a monitor lock
-        * to enter a synchronized block/method or
-        * reenter a synchronized block/method after calling
-        * {@link Object#wait() Object.wait}.
-        */
+         * Thread state for a thread blocked waiting for a monitor lock.
+         * A thread in the blocked state is waiting for a monitor lock
+         * to enter a synchronized block/method or
+         * reenter a synchronized block/method after calling
+         * {@link Object#wait() Object.wait}.
+         */
         BLOCKED,
 
         /**
-        * Thread state for a waiting thread.
-        * A thread is in the waiting state due to calling one of the
-        * following methods:
-        * <ul>
-        *   <li>{@link Object#wait() Object.wait} with no timeout</li>
-        *   <li>{@link #join() Thread.join} with no timeout</li>
-        *   <li>{@link LockSupport#park() LockSupport.park}</li>
-        * </ul>
-        *
-        * <p>A thread in the waiting state is waiting for another thread to
-        * perform a particular action.
-        *
-        * For example, a thread that has called <tt>Object.wait()</tt>
-        * on an object is waiting for another thread to call
-        * <tt>Object.notify()</tt> or <tt>Object.notifyAll()</tt> on
-        * that object. A thread that has called <tt>Thread.join()</tt>
-        * is waiting for a specified thread to terminate.
-        */
+         * Thread state for a waiting thread.
+         * A thread is in the waiting state due to calling one of the
+         * following methods:
+         * <ul>
+         *   <li>{@link Object#wait() Object.wait} with no timeout</li>
+         *   <li>{@link #join() Thread.join} with no timeout</li>
+         *   <li>{@link LockSupport#park() LockSupport.park}</li>
+         * </ul>
+         *
+         * <p>A thread in the waiting state is waiting for another thread to
+         * perform a particular action.
+         *
+         * For example, a thread that has called <tt>Object.wait()</tt>
+         * on an object is waiting for another thread to call
+         * <tt>Object.notify()</tt> or <tt>Object.notifyAll()</tt> on
+         * that object. A thread that has called <tt>Thread.join()</tt>
+         * is waiting for a specified thread to terminate.
+         */
         WAITING,
 
         /**
-        * Thread state for a waiting thread with a specified waiting time.
-        * A thread is in the timed waiting state due to calling one of
-        * the following methods with a specified positive waiting time:
-        * <ul>
-        *   <li>{@link #sleep Thread.sleep}</li>
-        *   <li>{@link Object#wait(long) Object.wait} with timeout</li>
-        *   <li>{@link #join(long) Thread.join} with timeout</li>
-        *   <li>{@link LockSupport#parkNanos LockSupport.parkNanos}</li>
-        *   <li>{@link LockSupport#parkUntil LockSupport.parkUntil}</li>
-        * </ul>
-        */
+         * Thread state for a waiting thread with a specified waiting time.
+         * A thread is in the timed waiting state due to calling one of
+         * the following methods with a specified positive waiting time:
+         * <ul>
+         *   <li>{@link #sleep Thread.sleep}</li>
+         *   <li>{@link Object#wait(long) Object.wait} with timeout</li>
+         *   <li>{@link #join(long) Thread.join} with timeout</li>
+         *   <li>{@link LockSupport#parkNanos LockSupport.parkNanos}</li>
+         *   <li>{@link LockSupport#parkUntil LockSupport.parkUntil}</li>
+         * </ul>
+         */
         TIMED_WAITING,
 
         /**
-        * Thread state for a terminated thread.
-        * The thread has completed execution.
-        */
+         * Thread state for a terminated thread.
+         * The thread has completed execution.
+         */
         TERMINATED;
     }
     ```
 
-    每一个锁对象都对应着一个等待队列。也就是说如果一个线程在获取到锁之后发现某个条件不满足，就主动让出锁然后把这个线程放到与它获取到的锁对应的那个等待等待队列里，另一个线程在完成对应条件后通知它获取的锁对应的等待队列。这个过程意味着**锁和等待队列建立了一对一的关联**。
-    **让出锁并且把线程放到与锁相关联的等待队列中**
-    **完成了任务释放锁时通知等待在与这个锁相关联的等待队列里的线程可以再次尝试获取锁**
+    ![线程状态图](../Image/线程状态图.png)
 
     ```java
     /*
@@ -108,7 +110,7 @@
     |方法|说明|
     |:-:|:-:|
     |``wait()``|在线程获取到锁之后，调用**锁对象的本方法**，线程释放锁并且把该线程放置到与该锁对象关联的等待队列中|
-    ``wait(long timeout)``|与``wait()``方法相似，只不过等待指定的毫秒数，如果超时，那么会自动把该线程从等待队列中移除，从而可以重新获取锁|
+    ``wait(long timeout)``|与``wait()``方法相似，只不过等待指定的**毫秒数**``milliseconds``，如果超时，那么会自动把该线程从等待队列中移除，从而可以重新获取锁|
     |``wait(long timeout, int nanos)``|与上面的方法相同，只不过时间粒度更小，指定毫秒数加上纳秒数|
     |``notify()``|通知一个在与该锁对象关联的等待队列里的线程，使它从``waiit()``方法中返回，重新具有获取锁的资格|
     |``notifyAll()``|通知所有的线程，使所有的线程具有获取锁的机会|
@@ -121,16 +123,34 @@
     2. 补充
         1. ``notify()``方法只会将等待队列中的一个线程移出，而``notifyAll()``方法会将等待队列中的所有线程移出。
 
-        2. 在调用完锁对象的``notify``或者``notifyAll``方法后，等待线程并不会立即从``wait()``方法返回，需要调用``notify()``或者``notifyAll()``的线程释放锁之后，等待线程才从``wait()``返回继续执行。
-        也就是说如果通知线程在调用完锁对象的notify或者notifyAll方法后还有需要执行的代码，就像这样：
+        2. 在调用完锁对象的``notify``或者``notifyAll``方法后，等待线程并不会立即从``wait()``方法返回，需要调用``notify()``或者``notifyAll()``的线程释放锁之后，等待线程才从``wait()``返回,然后等待线程调度系统来调度线程。由**线程调度系统来决定哪个线程能获取到锁**。**如果该线程被线程调度系统选中获取锁，那么直接进入到``RUNNABLE``状态。如果获取锁失败，那么进入到``BLOCKED``状态**。即一个线程被``wait()``唤醒，也可能没有竞争到锁，那么进入到``BLOCKED``状态。注意与``AQS``不同，``AQS``一定是会让同步队列的队首元素获取到锁。而``synchronized``是由线程调度随机获取到锁（**可能也是队首？？**）。
+        也就是说如果通知线程在调用完锁对象的``notify``或者``notifyAll``方法后还有需要执行的代码，那么会等待代码执行完，并将锁释放，**线程调度系统才能决定**由哪个线程获取锁。如下所示，必须等通知后的处理逻辑代码执行完，线程调度系统进行线程调度。
 
             ```java
             synchronized (对象) {
                 完成条件
                 对象.notifyAll();
-            ... 通知后的处理逻辑
+                通知后的处理逻辑
             }
             ```
+
+        3. 几个方法比较
+            + ``THread.sleep(lomg millis)``：**当前线程实例调用此方法**，当线程进入到``TIMED_WAITING``状态，但不释放锁，``millis``后线程自动苏醒进入到就绪状态。
+
+            + ``Thread.yield()``：**当前线程调用此方法**，使得当前线程放弃获取到的``CPU``时间片，**但不释放锁资源**，由运行状态变为就绪状态，让线程调度系统再次调度线程。主要作用是为了让相同的线程轮流执行，但**不保证一定会轮流执行**。实际中可能无法保证``yield()``方法达到让步的目的，因为让步的线程还是有可能被线程调度程序再次选中。``Thread.yield()``不会造成阻塞。
+
+            + ``Thread.join()/Thread.join(long mills)``：在当前线程里调用其他线程``t``的``join()``方法，当前线程会进入到``WAITING/TIMED_WAITING``状态，当前线程一般不会释放已经持有的对象锁。线程``t``执行完毕或者``millis``时间到，会进入到
+
+            + ``obj.wait()``：当前线程释放锁，进入到等待队列。需要被``notify()``或者``notifyAll()``唤醒。然后由线程调度系统来决定是否被选中获取锁。如果选中它获取锁，那么进入到``RUNNABLE``状态。如果没有选中，那么进入到``BLLOCKED``状态。
+
+            + ``obj.notify()``唤醒在此对象监视器上的单个线程。``选择是任意的``。``obj.notifyAll()``唤醒此对象监视器上的所有的线程。
+
+            + ``LockSupport.park()/LockSupport.parkNanos(long nanos),LockSupport.parkUntil(long deadlines)``, 当前线程进入``WAITING/TIMED_WAITING``状态。对比``wait``方法,不需要获得锁就可以让线程进入``WAITING/TIMED_WAITING``状态，需要通过``LockSupport.unpark(Thread thread)``唤醒。
+
+        4. **迷惑的地方？？？**
+
+            对于隐式锁``synchronized``,当执行``wait()``方法，会进入到等待队列。``notify()``唤醒时，会**随机**唤醒等待队列中的一个线程。然后该线程进入到同步队列。然后线程调度系统在同步队列里**随机**让一个线程获取锁。
+            而``AQS``会使同步队列中的队首线程获取到锁（非公平锁的情况下，可能不符合），从而进入到``RUNNABLE``状态。
 
     3. 生产者消费者模式
 
@@ -448,3 +468,5 @@
             ```
 
             在上面的处理逻辑中，必须保证``wait()``方法的调用在``while``循环中。其实如果只有一个生产者线程并且只有一个消费者线程的话，那么其实可以用``if``代替``while``。因为唯一的生产者线程只能被唯一的消费者线程唤醒。唯一的消费者线程只能被唯一的生产者线程唤醒。因此，当生产者线程或者消费者线程被唤醒时，条件总是成立。但是在多个生产者线程和多个消费者线程的情况下，一个消费者（以消费者线程说明，生产者同理）线程被唤醒，并获取到了锁，并不能保证该消费者线程**此时便能够消费**。因为唤醒并争取到了锁，在这一段时间内，可能有其他的线程将生产者生产的产品全部消费。
+
+        10. 阻塞队列实现生产者消费者模式
