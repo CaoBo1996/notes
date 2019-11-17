@@ -170,8 +170,22 @@
             return ftask;
         }
 
+        public <T> Future<T> submit(Runnable task, T result) {
+            if (task == null) throw new NullPointerException();
+            RunnableFuture<T> ftask = newTaskFor(task, result);
+            execute(ftask);
+            return ftask;
+        }
+
         protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value) {
             return new FutureTask<T>(runnable, value);  // 参照Thread.md文件
+        }
+
+        public <T> Future<T> submit(Callable<T> task) {
+            if (task == null) throw new NullPointerException();
+            RunnableFuture<T> ftask = newTaskFor(task);
+            execute(ftask);  // 本质上还是调用execute(ftask)方法。而execute()方法参数类型是Runnable接口
+            return ftask;
         }
         ```
 
@@ -180,8 +194,5 @@
 
         + ``execute()``方法是在``Executor``接口中定义的。在``ThreadPoolExecutor``类中实现。而``submit()``方法是在``ExecutorService``接口中定义的，在``AbstractExecutorService``中进行实现。而这几个类与接口的``UML``图如上所示。
 
-        + ``submit()``方法有三个重载形式。可以直接传入一个``Callable``实例。也可以直接传入一个``Runnable``实例，也可以传入``Runnable task, T result``。当成功完成执行``Runnable``实例的``run()``方法之后，会将``result``返回。
-
-
-
-
+        + ``submit()``方法有三个重载形式。可以直接传入一个``Callable``实例。也可以直接传入一个``Runnable``实例，也可以传入``Runnable task, T result``。
+        不管是传入``Callable``实例还是``Runnable``实例，**都会在内部将其包装成FutureTask**，然后调用``execute()``方法，将该``FutureTask``提交给线程池。
