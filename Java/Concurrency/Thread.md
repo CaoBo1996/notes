@@ -72,18 +72,49 @@
         1. 源码如下（``FutureTask``中的实现）
 
             ```java
-            public boolean isCancelled() {
 
-                //cancell()方法返回true，那么则返回true。
+            /**
+             * cancell()方法返回true，那么该方法肯定返回true
+             * 因为只要cancell()方法能够成功执行，那么任务最终
+             * 得状态肯定是CANCELL或者INTERRUPTED，那么state肯定是大于
+             * CANCELL的。所以返回true
+             */
+            public boolean isCancelled() {
                 return state >= CANCELLED;
             }
 
+
+            /**
+             * 只要线程的状态不为NEW，那么就返回ture
+             */
             public boolean isDone() {
                 return state != NEW;
             }
-            ```
 
-        2.
+            /**
+             * 如果线程还没有执行完任务，那么会使当前线程（即调用该方法的线程）阻塞。
+             */
+            public V get() throws InterruptedException, ExecutionException {
+                int s = state;
+                if (s <= COMPLETING)
+                    s = awaitDone(false, 0L);
+                return report(s);
+            }
+
+            /**
+             * 等待参数时间，如果在规定的时间内还没有任务还没有结束，那么直接抛出TimeoutException
+             */
+            public V get(long timeout, TimeUnit unit)
+                    throws InterruptedException, ExecutionException, TimeoutException {
+                if (unit == null)
+                    throw new NullPointerException();
+                int s = state;
+                if (s <= COMPLETING &&
+                        (s = awaitDone(true, unit.toNanos(timeout))) <= COMPLETING)
+                    throw new TimeoutException();
+                return report(s);
+            }
+            ```
 
     3. ``FutureTask``
 
@@ -168,6 +199,25 @@
                     int s = state;
                     if (s >= INTERRUPTING)
                         handlePossibleCancellationInterrupt(s);
+                }
+            }
+
+            protected void set(V v) {
+                //原子性将任务从NEW->COMPLETING。即如果cancell()方法在该方法之前执行
+                //那么set()方法直接失败
+                if (UNSAFE.compareAndSwapInt(this, stateOffset, NEW, COMPLETING)) {
+                    outcome = v;
+                    UNSAFE.putOrderedInt(this, stateOffset, NORMAL); // final state
+                    finishCompletion();
+                }
+            }
+
+            // 同理，也是原子性将任务状态从NEW->COMPLETING
+            protected void setException(Throwable t) {
+                if (UNSAFE.compareAndSwapInt(this, stateOffset, NEW, COMPLETING)) {
+                    outcome = t;
+                    UNSAFE.putOrderedInt(this, stateOffset, EXCEPTIONAL); // final state
+                    finishCompletion();
                 }
             }
 
@@ -322,6 +372,6 @@
 
         3. 适配器模式
 
-
-
-
+        ```java
+        //TODO
+        ```

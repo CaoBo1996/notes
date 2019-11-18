@@ -41,8 +41,16 @@
     final ReentrantLock lock;  // 唯一锁对象
     private final Condition notEmpty;  // 出队线程监视器，notEmpty，说明队列没有空，那么出队线程可执行出队操作
     private final Condition notFull;  // 入队线程监视器，notFull，说明队列没有满。那么入队线程可执行入队操作
-    int putIndex;  // 入队线程放置元素的索引
-    int takeIndex;  // 出队线程放置元素的索引
+    int putIndex;  // 下一个入队线程放置元素的索引
+    int takeIndex;  // 下一个出队线程放置元素的索引
+    /**
+     * 本质上数组是一个循环数组。即如果添加元素，添加到了末尾，即进行一次入队操作之后
+     * 会进行putIndex++。如果此时putIndex加1之后等于element.length(注意数组的最后一位索引下标为length-1)，那么
+     * 直接将putIndex == 0。
+     * 同理takeIndex也是如此。进行出队，也会takeIndex++。如果此时 takeIndex == length，那么直接将
+     * takeIndex == 0
+     *
+     */
     ```
 
 3. 重要方法
@@ -200,10 +208,12 @@
                 if (++takeIndex == items.length)
                 takeIndex = 0;
                 count--;
-            if (itrs != null)
+
+                //将迭代器的元素删除
+                if (itrs != null)
                     itrs.elementDequeued();
-            notFull.signal();  // 唤醒一个入队线程
-                return x;
+                notFull.signal();  // 唤醒一个入队线程，即将对方唤醒
+                    return x;
             }
 
             ```
@@ -330,3 +340,207 @@
         }
     }
     ```
+
+## ``LinkedBlockingQueue``
+
+底层是链表实现。出队线程**只能操作``head``指针**。入队线程**只能操作``last``指针**。并且``LinkedBlockingQueue``初始化时，构造函数会创建一个头节点，该头节点不存放任何数据，并且初始化时，``head``和``last``均指向这个不保存数据的头节点。综合以上两点，从而可以保证入队和出队操作可以同时进行，而不会造成什么数据的不安全性。并且内部记录此时队列元素个数的``count``是一个``AtomicInteger``类，所以保证``count``在入队和出队的并发访问中是可以保证数据正确的。
+
+```java
+
+/**
+ * 构造函数会先创建一个不存放任何数据的头节点
+ */
+
+public LinkedBlockingQueue(int capacity) {
+    if (capacity <= 0) throw new IllegalArgumentException();
+    this.capacity = capacity;
+    //创建一个不存放数据的头节点，并且last和head初始化均指向这个头节点
+    last = head = new Node<E>(null);
+}
+
+public LinkedBlockingQueue() {
+    this(Integer.MAX_VALUE);
+}
+
+/**
+ * 存放数据的节点类
+ */
+static class Node<E> {
+    E item;  // 具体的数据
+
+    /**
+     * One of:
+     * - the real successor Node
+     * - this Node, meaning the successor is head.next
+     * - null, meaning there is no successor (this is the last node)
+     */
+    Node<E> next;  //指向队列下一个元素的引用
+
+    Node(E x) {
+        item = x;
+    }
+}
+```
+
+```java
+/**
+ * 在入队和出队操作中，都是先获取count的值，然后再
+ * 对count进行加1（入队）或者减1（c出队）操作。
+ */
+
+public void put(E e) throws InterruptedException {
+    if (e == null) throw new NullPointerException();
+    // Note: convention in all put/take/etc is to preset local var
+    // holding count negative to indicate failure unless set.
+    int c = -1;
+    Node<E> node = new Node<E>(e);
+    final ReentrantLock putLock = this.putLock;
+
+    //注意：count是AtomicInteger类型的。从而保证了count的内存可见性
+    //count表示的是当前队伍中元素的个数，是LinkedBlockingQueue的一个成员变量
+    final AtomicInteger count = this.count;
+
+    putLock.lockInterruptibly();
+    try {
+        while (count.get() == capacity) {
+            notFull.await();
+        }
+        enqueue(node);  //将节点入队
+        /**
+         * 注意：
+         *   1.是先将节点入队之后才进行原子的加1操作。如果整个入队操作
+         *     没有完成，那么消费者在已经将所有的元素出队，也不能把这个元素
+         *     出队，避免造成数据混乱错误的现象
+         *   2.先是get然后再进行原子性的减1操作
+         */
+
+        c = count.getAndIncrement();
+        if (c + 1 < capacity)
+            //说明入队一个元素之后还没到队列的容量（可能此时出队线程也进行了操作
+            //此时c与c = count.ggetAndIncrement()得到的c不相同。但是没关系，如果
+            //此时出队线程进行了操作，那么c肯定是比原子性得到的c要小）
+            notFull.signal();  // 唤醒同类的生产者线程。
+    } finally {
+        putLock.unlock();
+    }
+    /**
+     1.如果c == 0，而c是在入队操作之前获取的（c=getAndIncrement），
+       所以此时c == 0，说明在入队操作之前队列已经为空，那么可能出现
+       的一个情况就是所有的出队线程均处在await()状态。注意是可能出现这种情况的。
+       因为出队线程和入队线程在上述的代码中只唤醒自己同类的线程。而之前的生产者消费者
+       是唤醒对方线程。所以，如果没有下面的if，可能所有的出队线程此时已经阻塞。没有其他的线程
+       将其唤醒。所以下面的语句必须要有。
+     */
+    if (c == 0)
+        signalNotEmpty();  // 唤醒一个出队线程。
+}
+
+```
+
+说明：``LinkedBlockingQueue``是一个单向队列，队列的头节点不存储元素。示意图如下：
+![``LinkedBlockingQueue``示意图](../Image/LinkedBlockingQueue.png)
+
+```java
+
+/**
+ * 处理入队和出队的操作
+ */
+private void enqueue(Node<E> node) {
+    // assert putLock.isHeldByCurrentThread();
+    // assert last.next == null;
+    last = last.next = node;
+
+    /**
+     * 上面代码可以拆解成下面几步：
+     * node = new Node(E);
+     * last.next = node;
+     * last = last.next;
+     */
+}
+
+/**
+ * 出队逻辑：
+ * 将当前头节点的下一个节点作为新的头节点，并在上述操作之前将该节点的元素返回
+ * 作为出队的元素
+ */
+private E dequeue() {
+    // assert takeLock.isHeldByCurrentThread();
+    // assert head.item == null;
+    Node<E> h = head;
+    Node<E> first = h.next;
+    h.next = h; // help GC
+    head = first;
+    E x = first.item;
+    first.item = null;
+    return x;
+}
+```
+
+## ``ArrayBlockingQueue``和``LinkedBlockingQueue``比较
+
+1. **队列大小不同**
+    + ``ArrayBlockingQueue``是**有界**的，即在创建``ArrayBlockingQueue``实例时，必须在构造函数中指定``capacity``。而``LinkedBlockingQueue``可以是无界的。即在创建``LinkedBlockingQueue``时，可以指定容量大小，也可以不指定容量大小。如果不指定的话，那么``capacity``的默认为``Integer.MAX_VALUE``。
+
+    + 如果``LinkedBlockingQueue``在初始化实例时没有指定容量大小，那么容量为``Integer.MAX_VALUE``。这样的话，如果入队线程添加元素的速度大于出队线程添加元素的个数，那么由于没有队列的容量限制，所以不会发生阻塞，一直入队，从而可能造成内存溢出，发生``OOM``。
+
+2. **存储队列元素的容器不同**
+
+    + ``ArrayBlockingQueue``采用的是数组作为数据存储容器。且数组的容量大小在创建``ArrayBlockingQueue``实例时即必须要指定，并且之后不能够更改。即创建``ArrayBlockingQueue``时，就要给**数组赋予一大片连续的内存空间**。
+
+    + ``LinkedBlockingQueue``是采用链表作为存储对象的数组。链表的每一个节点是该类的一个内部类``Node``。每次入队线程添加一个新的元素到队列中去，都会新创建一个``Node``节点来存储这个元素。所以，``LinkedBlockingQueue``不会像``ArrayBlockingQueue``一样，初始化就需要申请占用一大片连续的内存。
+
+3. **对``GC``可能造成影响**
+
+    + 由于``ArrayBlockingQueue``采用的数组来存储元素，所以在插入和删除数据的时候，不会产生或者销毁额外的对象。而``LinkedBlockingQueue``由于每次入队一个元素都会额外的生成一个``Node``对象实例来存储这个元素，在出队时，将头节点``Node``对象给销毁，进行``GC``操作。所以，在长时间内需要高效并发的处理大批量数据的时候，会``GC``可能造成影响。
+
+4. **内部实现同步的锁不一样**
+
+    + ``ArrayBlockingQueue``内部全局只有一个锁对象。出队线程和入队线程都必须获得这个锁对象才能进行出队和入队的操作。也就是说，同一时刻，只能有一个线程获取到锁。可能是出队线程，也可能是入队线程。
+
+        ```java
+        /**
+         * Main lock guarding all access
+         */
+        final ReentrantLock lock;
+
+        /**
+         * Condition for waiting takes
+         */
+        private final Condition notEmpty;
+
+        /**
+         * Condition for waiting puts
+         */
+        private final Condition notFull;
+        ```
+
+    + ``LinkedBlockingQueue``内部定义了两个锁对象。所有的入队线程获取的是一个锁对象，所有的入队线程获取的是一个锁对象。出队线程获取锁与入队线程获取锁相互不干扰。也就是说，出队线程和入队线程可以同时进行。内部代表此时队列中元素个数的成员变量``count``是``AtomicInteger``类型的，从而保证了数据的一致性。
+
+        ```java
+        /** Lock held by take, poll, etc */
+        private final ReentrantLock takeLock = new ReentrantLock();
+
+        /** Wait queue for waiting takes */
+        private final Condition notEmpty = takeLock.newCondition();
+
+        /** Lock held by put, offer, etc */
+        private final ReentrantLock putLock = new ReentrantLock();
+
+        /** Wait queue for waiting puts */
+        private final Condition notFull = putLock.newCondition();
+        ```
+
+    + 由于``LinkedBlockingQueue``实现了所分离，即入队线程采用的是``putLock``，出队线程采用的是``takeLock``，这样能大大的提高队列的**吞吐量**，也就是意味着在高并发的情况下生产者和消费者可以同时并行的操作队列中的数据，以此来提高整个队列的并发性能。
+
+        ```java
+        //TODO 啥叫吞吐量
+        ```
+
+    + ``LinkedBlockingQueue``记录当前队列元素个数的``count``是``AtomicInteger``类型的，而``ArrayBlockingQueue``记录队列元素个数的``count``是普通``int``类型的。
+
+        ```java
+        //LinkedBlockingQueue
+         private final AtomicInteger count = new AtomicInteger();
+        //ArrayBlockingQueue
+        int count;
+        ```
