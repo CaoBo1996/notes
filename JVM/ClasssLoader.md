@@ -18,7 +18,7 @@
         + ``HotSpot``虚拟机而言，**该对象存放在方法区中**。
 
 2. 类加载器
-    类加载器实现的功能是将类加载到``JVM``中。
+    + 类加载器实现的功能是将类加载到``JVM``中。
 
     1. 类的唯一性
         对于任意一个类，都需要由加载它的类加载器和这个类本身一同确立其在``Java``虚拟机中的唯一性。即比较两个类是否**相等**，只有在这两个类是由同一个类加载器加载的前提下才有意义，否则，即使这两个类来源于同一个``*.class``文件，并且位于同一个虚拟机实例，只要加载它们的类加载器不同，那么这两个类必定不相等。
@@ -31,10 +31,9 @@
 
         + 注意：在``IDEA``中，``classpath``被修改为``D:\GoogleDownload\ClassViewer_win521\StringLearn\out\production\StringLearn``。
 
-
     2. 双亲委派模型
 
-        1. 从虚拟机的角度来看，只存在两种不同的类加载器：一种是启动类加载器（``Bootstrap ClassLoader``），这个类加载器是由``C++``语言实现，是虚拟机的一部分；另一种就是所有的其他的类加载器，这些类加载器都由``Java``语言实现，并且**全部继承自抽象类``java.lang.ClassLoader``**，即这些类加载器都是由``Java``语言写出来的类。其中``AppClassLoader``和``ExtClassLoader``类加载器的源码在``sun.misc.Launcher.java``文件中，``ExtClassLoader``和``AppClassLoader``都是``Launch``类的**静态内部类**。而``sun.misc.Launch.java``类的二进制字节码文件``sun.misc.Launch.class``是由``Bootstrap ClassLoader``类加载器来进行加载的。可以通过以下代码来进行验证：
+        1. 从虚拟机的角度来看，只存在两种不同的类加载器：一种是启动类加载器（``Bootstrap ClassLoader``），这个类加载器是由``C++``语言实现，是虚拟机的一部分；另一种就是所有的其他的类加载器，这些类加载器都由``Java``语言实现，并且**全部继承自抽象类``java.lang.ClassLoader``**，即这些类加载器都是由``Java``语言写出来的类。其中``AppClassLoader``和``ExtClassLoader``类加载器的源码在``sun.misc.Launcher.java``文件中，``ExtClassLoader``和``AppClassLoader``都是``Launcher``类的**静态内部类**。而``sun.misc.Launch.java``类的二进制字节码文件``sun.misc.Launch.class``是由``Bootstrap ClassLoader``类加载器来进行加载的。可以通过以下代码来进行验证：
 
             ```java
             //控制台打印输出为 null。说明Launcher是通过Bootstrap ClassLoader来进行加载的
@@ -106,6 +105,8 @@
                 ![ExtClassLoader](../Java/Image/ExtensionClassLoader.png)
 
         2. **每一个加载器类都有一个父加载器**
+
+            + 父类加载器的实现不是通过继承来实现的，而是通过组合来实现的。
 
             + 每一个类加载器的父加载器的引用都保存在该类加载器的成员变量``parent``中。因为除了``Bootstrap ClassLoader``，所有的类加载器均继承（间接继承）自``ClassLoader`` ，即也继承了这个类的成员变量``parent``。
 
@@ -203,9 +204,9 @@
                 ```
 
             + ``ClassLoader``类的``loadClass()``方法源码如下：
-                ~~**注意**：分析这个方法只要分析其实现逻辑即可，不要去分析其具体是怎么加载的。即``AppClassLoader``和``ExtClassLoader``和``Bootstrap ClassLoader``的``findClass``方法是本地方法，可能是其他什么语言实现，在源码中看不到，但是我们只要自己知道``findClass()``是实现去查找类然后加载到虚拟机即可~~。然后**当我们自定义类加载器时，便是要重写该方法**。``override findClass()``方法也**不会破坏双亲委派模型**。
+                **注意**：分析这个方法只要分析其实现逻辑即可，不要去分析其具体是怎么加载的。即``AppClassLoader``和``ExtClassLoader``和``Bootstrap ClassLoader``的``findClass``方法是本地方法，可能是其他什么语言实现，在源码中看不到，但是我们只要自己知道``findClass()``是实现去查找类然后加载到虚拟机即可~~。然后**当我们自定义类加载器时，便是要重写该方法**。``override findClass()``方法也**不会破坏双亲委派模型**。
 
-            + ``ClassLoader``类的``loadClass()``方法仅仅抛出了一个异常，并没有进行实际的类加载的实现。注意``AppClassLoader``继承自``URLClassLoader``，而``URLClassLoader``重写了``ClassLoader``类中的``loadClass()``方法，这个实际上是真正执行加载操作。``AppClassLoader``类也重写了``loadClass()``方法，但仅仅是额外增加了一些权限检查操作。最后还是调用``super.loadClass(name, resolve)``，即``URLClassLoader``类中的``loadClass()``方法。而该方法并没有被``URLClassLoader``和``SecurityClassLoader``重写，所以还是调用``ClassLoader``类中的``loadClass()``方法。**但是，此时loadClass()方法里调用的findClass()方法是``URLClassLoader``类``Override ClassLoader``类的方法，而正是这个方法真正实现了加载类的操作**。``URLClassLoader``类实现的``findClass()``方法源码如下：
+            + ``ClassLoader``类的``loadClass()``方法仅仅抛出了一个异常，并没有进行实际的类加载的实现。注意``AppClassLoader``继承自``URLClassLoader``，而``URLClassLoader``重写了``ClassLoader``类中的``loadClass()``方法，这个实际上是真正执行加载操作。``AppClassLoader``类也重写了``loadClass()``方法，但仅仅是额外增加了一些权限检查操作。最后还是调用``super.loadClass(name, resolve)``，即``URLClassLoader``类中的``loadClass()``方法。而该方法并没有被``URLClassLoader``和```SecurityClassLoader`重写，所以还是调用``ClassLoader``类中的``loadClass()``方法。**但是，此时loadClass()方法里调用的findClass()方法是``URLClassLoader``类``Override ClassLoader``类的方法，而正是这个方法真正实现了加载类的操作**。``URLClassLoader``类实现的``findClass()``方法源码如下：
 
                 ```java
 

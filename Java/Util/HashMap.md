@@ -5,77 +5,86 @@
 + 存储``key``和``value``的静态类
 
     ```java
-        static class Node<K, V> implements Map.Entry<K, V> {
-            final int hash;
-            final K key; //存储了实际的key
-            V value; //存储了实际的value
-            Node<K, V> next; //这是一个指针，指向了下一个Node节点，即HashMap通过链地址法（拉链法）来解决hash碰撞的问题。
+    static class Node<K, V> implements Map.Entry<K, V> {
+        final int hash;
+        final K key; //指向实际的 key 对象
+        V value; //指向了实际的 value 对象
 
-            Node(int hash, K key, V value, Node<K, V> next) {
-                this.hash = hash;
-                this.key = key;
-                this.value = value;
-                this.next = next;
-            }
+        // 什么叫 hash 碰撞，即不同的 hash 值通过散列函数散列到了数组的相同的位置
+        // HashMap 存储的 key 是唯一的，但是不同的 Key 可能有相同的 hash 值，然后
+        // 通过散列函数运算，散列到相同的位置，也有可能是相同的 key 散列到了相同的位置
+        // 所以发生 hash 碰撞可能是 put 了相同的 key，也可能是不同的 key
+
+        // 散列函数仅仅对 hash 值进行运算
+        Node<K, V> next; //Node 类型指针，指向了下一个Node节点，即HashMap通过链地址法（拉链法）来解决hash碰撞的问题。
+
+        Node(int hash, K key, V value, Node<K, V> next) {
+            this.hash = hash;
+            this.key = key;
+            this.value = value;
+            this.next = next;
         }
+    }
     ```
 
 ``Notes``:
 
-1. 该类是实际存储``key``和``value``的静态类，其中``key``的类型是``K``类型的，``value``的类型是``V``类型的。分别存储在该类的属性``key``和``value``中。
-2. **且key和value只能是引用数据类型，不能是基本数据类型**。因为要判断``key``是否相等，需要调用``hashcode()``和``equal()``方法。而基本数据类型并没有这两个方法。对于``null``，默认``hash``值为0。即``null``为``key``的``key-value``映射对总是存储在``table``索引下标为0的位置。
+1. 该类是实际存储``key``和``value``的静态类，其中``key``的类型是``K``类型的，``value``的类型是``V``类型的。该类的属性``key``和``value``分别指向了``K``和``V``这两个对象。
+2. **且key和value只能是引用数据类型，不能是基本数据类型**。首先对于任意的``key``，需要将其``hash``值带入到散列函数中。然后要判断``key``是否相等，需要调用``hashcode()``和``equal()``方法。而基本数据类型并没有这两个方法。对于``null``，默认``hash``值为 0 。即``null``为``key``的``key-value``映射对总是存储在``table``索引下标为0的位置。
 
 + ``HashMap``的构造函数
 
     ```java
-        /*
-        初始化一个HashMap时，此时并没有创建Node<K,V> table 数组，仅仅是对一些变量进行了赋值操作。
-        */
-        public HashMap(int initialCapacity, float loadFactor) {
-            if (initialCapacity < 0)
-                throw new IllegalArgumentException("Illegal initial capacity: " +
-                        initialCapacity); //如果小于0，则抛异常
-            if (initialCapacity > MAXIMUM_CAPACITY)
-                initialCapacity = MAXIMUM_CAPACITY; //如果大于MAXIMUM-CAPACITY，则设置成MAXIMUM_CAPACITY == 2^30
-            if (loadFactor <= 0 || Float.isNaN(loadFactor))  // 检查loadFactor的合法性
-                throw new IllegalArgumentException("Illegal load factor: " +
-                        loadFactor);
-            this.loadFactor = loadFactor; //显示初始化加载因子
-            this.threshold = tableSizeFor(initialCapacity); //对传入的initCapacity进行Size规则化。使得capacity的大小永远为2^n次方。n=0,1,2,...,30
-        }
+
+    // 初始化一个HashMap时，此时并没有创建Node<K,V> table 数组，仅仅是对一些变量进行了赋值操作。
+
+    public HashMap(int initialCapacity, float loadFactor) {
+        if (initialCapacity < 0)
+            throw new IllegalArgumentException("Illegal initial capacity: " +
+                    initialCapacity); //如果小于0，则抛异常
+                    // Integer 范围 [-2^31,2^31-1]
+        if (initialCapacity > MAXIMUM_CAPACITY)
+        // 即从做开始数的第二位是 1 ，其他位全部为 0 ，因为是整数，所以左边起的第一位肯定也是 0
+            initialCapacity = MAXIMUM_CAPACITY; //如果大于MAXIMUM-CAPACITY，则设置成MAXIMUM_CAPACITY == 2^30
+        if (loadFactor <= 0 || Float.isNaN(loadFactor))  // 检查loadFactor的合法性
+            throw new IllegalArgumentException("Illegal load factor: " +
+                    loadFactor);
+        this.loadFactor = loadFactor; //显示初始化加载因子
+        this.threshold = tableSizeFor(initialCapacity); //对传入的initCapacity进行Size规则化。使得capacity的大小永远为2^n次方。n=0,1,2,...,30
+    }
 
     ```
 
     ```java
-        /**
-        * 分情况讨论（由于构造函数有对initCapacity进行负数或者是最大容量检查，所以此时参数只能是0-MAXIMUM_CAPACITY(2^30)）：
-        * 原理：总共两个操作，移位、或运算。
-        *       对于任意的n（非0），由于n为一个非0的数，那么n的二进制表示至少有一位为1。仅仅考虑n的最高位1。
-        *       Step1：进行 n |= n >>> 1，此时最高位1的右边一位不论之前是0还是1，经过与最高位1进行或运算，得到结果总是1。即这一步，让最高位右边的一位变为1
-        *              若最高位1已经是最低位（最右边），那么这一步以及接下来的几步n为原值。
-        *       Step2:进行n |= n >>> 2，经过Step1，已经有两个连续的1，执行Step2，得到4个连续的1。
-        *       Step3:...依次类推。
-        *       最终的结果：将最高位的1的右边位均变为1。而我们想要得到的是2^n。那么将该结果加1，得到的是原本最高位的左边位为1，其余位均为0。即为2^n
-        * 特殊情况：1.如果cap == 0，那么 n = -1,即二进制表示为11111111 11111111 11111111 11111111。仅仅考虑最高位1，经过移位、或操作，最终还是-1。返回结果则是1。
-        *          2.如果cap == MAXIMUM_CAPACITY，那么进行移位、或操作，就会得到 00111111 11111111 11111111 11111111 那么最终加1后取值为MAXIMUM-CAPACITY
-                    3.如果cap == 1，那么移位、或操作之后，n == 0，最终加1后取值为1
-        * 重要点：
-        *        1. 关注最高位1。移位与与操作即将最高位1右边的位数全部变为1。
-        *        2. MAXIMUM_CAPACITY = 2^30
-        *        3. 2^n那么二进制表示只有一位数为1。
-        * 方法的本质作用：
-        *               1.用于找到大于等于initialCapacity的最小的2的幂。比如0的时候为1，1的时候为1，2的时候为2，3的时候为4。
-        *               2.当initCapacity已经是2的幂的时候，那么直接取这个数。这个由函数内部的cap-1来保证。
-        */
-        static final int tableSizeFor(int cap) {
-            int n = cap - 1; //减1的原因是如果此时已经是2^n，那么经过下面操作，n变为了2^(n+1)。
-            n |= n >>> 1;
-            n |= n >>> 2;
-            n |= n >>> 4;
-            n |= n >>> 8;
-            n |= n >>> 16;
-            return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
-        }
+    /**
+    * 分情况讨论（由于构造函数有对initCapacity进行负数或者是最大容量检查，所以此时参数只能是0-MAXIMUM_CAPACITY(2^30)）：
+    * 原理：总共两个操作，移位、或运算。
+    *       对于任意的n（非0），由于n为一个非0的数，那么n的二进制表示至少有一位为1。仅仅考虑n的最高位1。
+    *       Step1：进行 n |= n >>> 1，此时最高位1的右边一位不论之前是0还是1，经过与最高位1进行或运算，得到结果总是1。即这一步，让最高位右边的一位变为1
+    *              若最高位1已经是最低位（最右边），那么这一步以及接下来的几步n为原值。
+    *       Step2:进行n |= n >>> 2，经过Step1，已经有两个连续的1，执行Step2，得到4个连续的1。
+    *       Step3:...依次类推。
+    *       最终的结果：将最高位的1的右边位均变为1。而我们想要得到的是2^n。那么将该结果加1，得到的是原本最高位的左边位为1，其余位均为0。即为2^n
+    * 特殊情况：1.如果cap == 0，那么 n = -1,即二进制表示为11111111 11111111 11111111 11111111。仅仅考虑最高位1，经过移位、或操作，最终还是-1。返回结果则是1。
+    *          2.如果cap == MAXIMUM_CAPACITY，那么进行移位、或操作，就会得到 00111111 11111111 11111111 11111111 那么最终加1后取值为MAXIMUM-CAPACITY
+                3.如果cap == 1，那么移位、或操作之后，n == 0，最终加1后取值为1
+    * 重要点：
+    *        1. 关注最高位1。移位与与操作即将最高位1右边的位数全部变为1。
+    *        2. MAXIMUM_CAPACITY = 2^30
+    *        3. 2^n那么二进制表示只有一位数为1。
+    * 方法的本质作用：
+    *               1.用于找到大于等于initialCapacity的最小的2的幂。比如0的时候为1，1的时候为1，2的时候为2，3的时候为4。
+    *               2.当initCapacity已经是2的幂的时候，那么直接取这个数。这个由函数内部的cap-1来保证。
+    */
+    static final int tableSizeFor(int cap) {
+        int n = cap - 1; //减1的原因是如果此时已经是2^n，那么经过下面操作，n变为了2^(n+1)。
+        n |= n >>> 1;
+        n |= n >>> 2;
+        n |= n >>> 4;
+        n |= n >>> 8;
+        n |= n >>> 16;
+        return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
+    }
     ```
 
 + 重要的属性
@@ -107,7 +116,14 @@
             1.对于key为null,则返回的hash值为0。从而插入的时候，会直接放在table索引为0的位置。即第一个位置。即HashMap中的key可以为null。但仅仅只能由一个key为null
             2.不然，调用key的原本的hashcode()方法（该方法可能被重写，也可能是直接继承Object类）得到hash值，将该
             hash值的低16位与高16位进行异或操作，作为最终的低16位。将异或过后的hash值作为最终的hash值返回。
+            这样做的目的是使 key 均匀得分布.得到 hash 值之后，便可以将此 key 的 hash 值代入到散列函数中，从而得到
+            // 该 key 散列到数组的中位置
             */
+
+            // 当 key 为  null，一定散列到数组索引为 0 的位置，
+            // 但数组索引为 0 的桶，存储的 key 可能不为 null
+            // 因为不为 null 的 key、也可能散列到数组索引为 0
+            // 的桶中
             return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
         }
 
@@ -131,17 +147,23 @@
             2.当发生了碰撞，则判断是否是相同的元素。判断流程如下：
                 2.1.若hash值不相等，那么直接判断条件结束，不需要在判断后面的条件，从而提高了效率（因为hash值不相等的两个key一定不相等），通过链地址法处理hash碰撞。
                 2.2.若hash值相等，那么也有可能不是同一个对象，此时要再次判断是否是同一个对象，判断方法如下：
-                    2.2.1.若两个对象内存地址相等（==比较的是内存地址），那么肯定是统一对象，直接返回True。不再进行判断，提高效率。
+                    2.2.1.若两个对象内存地址相等（==比较的是内存地址），那么肯定是同一对象，直接返回True。不再进行判断，提高效率。
                     2.2.2.若两个对象内存地址不相等，那么通过调用equals()方法，若相等，那么返回true。因为在java中，通过equals()方法判断两个对象相等，那么这两个对象肯定相等。之所以把equals()方法放在最后，是为了提高效率。毕竟调用方法来判断比较消耗资源。
                     2.2.3.当两个对象相等的时候，直接进行新值替代旧值。当两个对象不相等，那么直接通过链地址法来解决hash碰撞。
             */
+
+            // 散列函数为 hash & (n - 1)
             if ((p = tab[i = (n - 1) & hash]) == null)
                 tab[i] = newNode(hash, key, value, null);  // table数组在该下标下的位置为空，那么直接将key-value对放到该位置。
             else {
+                // 当前要放置的位置已经有了一个元素，说明此时发生了 hash 碰撞，那么到底再次插入相同的 key 导致发生 hash 碰撞还是
+                // 由于不同的 key 发生了 hash 碰撞，如果是前者，那么需要进行新值更新旧值的操作，如果是后者，那么需要 new 一个 Node
+                // 节点，通过链地址法来解决 hash 碰撞
                 Node<K, V> e;
                 K k;
                 if (p.hash == hash &&
                         ((k = p.key) == key || (key != null && key.equals(k))))
+                        // 找到了一个相等的 key 对象
                     e = p; // 新值替代旧值。否则若if条件不成立，说明对象不相等。则需要将该key-value也插入。
                 else if (p instanceof TreeNode)  // 如果此时头节点（即存放在数组中）为红黑数的节点，那么直接调用函数插入到红黑树中。
                     e = ((TreeNode<K, V>) p).putTreeVal(this, tab, hash, key, value);
@@ -174,13 +196,12 @@
                         e.value = value;
                     afterNodeAccess(e);
                     return oldValue;  // 并且会返回旧值。注意该旧值可能为null。因为value是可以为null的。
-                    return oldValue;  // 并且会返回旧值。注意该旧值可能为null。因为value是可以为null的。
                 }
             }
             ++modCount;
             /*
             每次插入一个key-value键值对时，都要更新size（即总的key-value对的个数）。并检查是否需要进行resize()操作。当size的值大于threshold，则需要resize()。
-            而threshold=loadFactor * capacity
+            而 threshold=loadFactor * capacity
             */
             if (++size > threshold)
                 resize();
@@ -306,6 +327,8 @@
             ```java
             public V get(Object key) {
                 Node<K, V> e;
+
+                // 当
                 return (e = getNode(hash(key), key)) == null ? null : e.value;
             }
 
@@ -325,7 +348,9 @@
                 K k;
                 if ((tab = table) != null && (n = tab.length) > 0 &&
                         (first = tab[(n - 1) & hash]) != null) {
-                    //当条件成立，检查哈希桶。首先检查第一个元素
+                    // 当条件成立，检查哈希桶。首先检查第一个元素，如果第一个元素 null，说明该桶还没有存储任何
+                    // 元素，所以，直接返回 null 。否则检查该桶中的每一个元素，如果发现 key 相同，那么返回，如果遍历
+                    // 完发现没有找到相等的 key ，那么说明该桶中没有指定查询的 key，那么返回 null
                     if (first.hash == hash &&
                             ((k = first.key) == key || (key != null && key.equals(k))))
                         return first;
@@ -367,11 +392,13 @@
 
             ```java
             public boolean equals(Object obj) {
-                    return (this == obj);
+                // 本质上通过调用 == 运算符来比较内存的地址
+                // A.equals(B)
+                return (this == obj);
             }
             ```
 
         + ``equals()``和``==``的区别：
-            + ``equals()``不能作用于基本数据类型，只能作用于引用类型的变量，如果没有对``equals()``方法进行重写，则比较的是引用类型的变量所指向的对象的地址；诸如``String``、``Integer``等类对``equals``方法进行了重写的话，比较的是所指向的对象的内容。（当然，前提肯定是先比较内存地址，因为内存地址相等了，那么肯定同一个对象。）
+            + ``equals()``不能作用于基本数据类型，只能作用于引用类型的变量，如果没有对``equals()``方法进行重写，则比较的是引用类型的变量所指向的对象的地址；诸如``String``、``Integer``等类对``equals``方法进行了重写的话，比较的是所指向的对象的内容。（当然，前提在代码中是实现肯定是先比较内存地址，因为内存地址相等了，那么肯定同一个对象，当内存地址不相等的时候，在比较值是否相等）
 
             + 对于``==``，比较的是值是否相等。如果作用于基本数据类型的变量，则直接比较其存储的 “值”是否相等；如果作用于引用类型的变量，则比较的是所指向的对象的地址。

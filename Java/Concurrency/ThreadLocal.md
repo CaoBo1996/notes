@@ -252,11 +252,11 @@ ThreadLcoal类是线程局部变量类。要创建一个线程局部变量，那
 
             + 内存泄露的问题
                 + 我们知道，``Java``中引用分为以下几个部分
-                    + 强引用：程序创建一个对象，并把这个对象赋值给一个引用变量，程序通过该引用变量来操作实际得对象。
+                    + 强引用：程序创建一个对象，并把这个对象赋值给一个引用变量，程序通过该引用变量来操作实际的对象。如果一个对象具有强引用，那垃圾收器绝不会回收它。当内存空间不足，``Java``虚拟机宁愿抛出``OutOfMemoryError``错误，使程序异常终止，也不会靠随意回收具有强引用 对象来解决内存不足的问题。
 
-                    + 软引用：在内存足够的时候，软引用对象不会被回收，只有在内存不足的时候，系统则会回收软引用对象。如果回收了软引用对象后仍然没有足够的内存，才会抛出内存溢出异常。
+                    + 软引用：在内存足够的时候，软引用对象不会被回收，只有在内存不足的时候，系统则会回收软引用对象。如果回收了软引用对象后仍然没有足够的内存，才会抛出内存溢出异常。像这种如果内存充足，``GC``时就保留，内存不够，``GC``再来收集的功能很适合用在缓存的引用场景中。在使用缓存时有一个原则，如果缓存中有就从缓存获取，如果没有就从数据库中获取，缓存的存在是为了加快计算速度，如果因为缓存导致了内存不足进而整个程序崩溃，那就得不偿失了。
 
-                    + 弱引用：弱引用的引用强度比软引用更要弱一些，无论内存是否足够，只要``JVM``开始进行垃圾回收，那么弱引用关联的对象都会被回收。
+                    + 弱引用：弱引用的引用强度比软引用要更弱一些，无论内存是否足够，只要``JVM``开始进行垃圾回收，若**某个对象只有弱引用引用该对象**，那么该对象就会被回收。
                     注意弱引用在``ThreadLocalMap``中用到。实际存储``key-value``对的``Entry``中的``key``就用到了弱引用。
 
                         ```java
@@ -290,13 +290,85 @@ ThreadLcoal类是线程局部变量类。要创建一个线程局部变量，那
                             }
                         ```
 
-                    + 虚引用：无法通过虚引用来获取对象
+                    + 虚引用：无法通过虚引用来获取对象。一个对象是否有虚引用的存在，完全不会对其生存时间构成影响，也无法通过虚引用来获取一个对象的实例。
 
                     + 弱引用和虚引用不常用，但是软引用经常使用。软引用常用于**缓存**中。比如**图片缓存**，**网页缓存**。
                         + 在网页缓存中，比如浏览器的后退按钮，按这个按钮时，显示的网页内容是重新进行请求还是从缓存中取出来呢？当我们浏览完一个网页后，可以将对这个网页对象的引用设置为软引用，这样的话，下次进行后退操作，准备重新加载的时候，先判断这个网页对象有没有被回收，如果被回收了，即此时指向这个对象的软引用为``null``，那么我们就重新``new``这个网页对象，并再次赋值为软引用。如果没有被回收，那么直接通过这个软引用得到这个网页对象即可。
 
                     + 线程泄露：
-                        + 因为``Entry``里的``key``是对``ThreadLcoal``实例对象的弱引用，所以在实例对象没有其他的强引用时，那么这个实例对象会被垃圾回收，那么此时``Entry``里的弱引用即为``null``，那么如果该线程仍然继续运行，那么这个``Entry``对象里的``Value``就无法得到回收。从而发生内存泄露的现象。**TODO**
+                        + 因为``Entry``里的``key``是对``ThreadLcoal``实例对象的弱引用，所以在实例对象没有其他的强引用时，那么这个实例对象会被垃圾回收，那么此时``Entry``里的弱引用即为``null``，那么如果该线程仍然继续运行，那么这个``Entry``对象里的``Value``就无法得到回收。从而发生内存泄露的现象。
+                        + 如下图所示：
+                        ![ThreadLocal](../Image/threadlocal.png)
+
+                        + 为什么``ThreadLocalMap``使用弱引用存储``ThreadLocal``?即``Entry``结构中``key``存放着是``ThreadLocal``对象的弱引用
+                            + 假如使用强引用，当``ThreadLocal``不再使用需要回收时，即我们在代码中将指向``ThreadLocal``对象实例的引用赋值为``null``，说明我们想将这个``ThreadLocal``实例弃用，即所有的使用这个对象实例的线程均不能在使用这个对象，如果``Entry``结构中的``key``是对这个``ThreadLocal``对象的强引用，那么发现某个线程中``ThreadLocalMap``存在该``ThreadLocal``的强引用，无法回收，造成内存泄漏。即我们已经没法在某个线程中通过``ThreadLocal``的``get()``方法来获得相应的``value``，并且其他线程也不可以，因为我们已经自己显示的将指向这个``ThreadLocal``对象的引用赋值为``null``，所以，任何线程都没法获取到了值，但是``ThreadLocal``对象因为强引用的关系没法释放，所以造成了泄露。但是如果是弱引用，那么肯定就在下一次``GC``时，将该对象给回收。
+
+                        + 那通常说的``ThreadLocal``内存泄漏是如何引起的呢？
+                            + 我们注意到``Entry``对象中，虽然``Key(ThreadLocal)``是通过弱引用引入的，但是``value``即变量值本身是通过强引用引入。这就导致，假如不作任何处理，由``ThreadLocalMap``和线程的生命周期是一致的，当线程资源长期不释放，即使``ThreadLocal``本身由于弱引用机制已经回收掉了，但``value``还是驻留在线程的``ThreadLocalMap``的``Entry``中。即存在``key``为``null``，但``value``却有值的无效``Entry``。导致内存泄漏。
+
+                            + 但实际上，``ThreadLocal``内部已经为我们做了一定的防止内存泄漏的工作。
+
+                                ```java
+                                /**
+                                 * Expunge a stale entry by rehashing any possibly colliding entries
+                                 * lying between staleSlot and the next null slot.  This also expunges
+                                 * any other stale entries encountered before the trailing null.  See
+                                 * Knuth, Section 6.4
+                                 *
+                                 * @param staleSlot index of slot known to have null key
+                                 * @return the index of the next null slot after staleSlot
+                                 * (all between staleSlot and this slot will have been checked
+                                 * for expunging).
+                                 */
+                                private int expungeStaleEntry(int staleSlot) {
+                                    Entry[] tab = table;
+                                    int len = tab.length;
+
+                                    // expunge entry at staleSlot
+                                    tab[staleSlot].value = null;
+                                    tab[staleSlot] = null;
+                                    size--;
+
+                                    // Rehash until we encounter null
+                                    Entry e;
+                                    int i;
+                                    for (i = nextIndex(staleSlot, len);
+                                        (e = tab[i]) != null;
+                                        i = nextIndex(i, len)) {
+                                        ThreadLocal<?> k = e.get();
+                                        if (k == null) {
+                                            e.value = null;
+                                            tab[i] = null;
+                                            size--;
+                                        } else {
+                                            int h = k.threadLocalHashCode & (len - 1);
+                                            if (h != i) {
+                                                tab[i] = null;
+
+                                                // Unlike Knuth 6.4 Algorithm R, we must scan until
+                                                // null because multiple entries could have been stale.
+                                                while (tab[h] != null)
+                                                    h = nextIndex(h, len);
+                                                tab[h] = e;
+                                            }
+                                        }
+                                    }
+                                    return i;
+                                }
+                                ```
+
+                                上述方法的作用是擦除某个下标的``Entry``（置为``null``，可以回收），同时检测整个``Entry[]``表中对``key``为``null``的``Entry``一并擦除，重新调整索引。该方法，在每次调用``ThreadLocal``的``get``、``set``、``remove``方法时都会执行，即``ThreadLocal``内部已经帮我们做了对``key``为``null``的``Entry``的清理工作。但是该工作是有触发条件的，需要调用相应方法，假如我们使用完之后不做任何处理是不会触发的。即一个很好的习惯是**当使用完一个值**，要将其``remove()``。
+
+                                + 防止内存泄漏，应该养成以下良好的编程习惯
+
+                                    ```java
+                                    try {
+                                        threadLocal.set(new Session(1, "Misout的博客"));
+                                        // 其它业务逻辑
+                                    } finally {
+                                        threadLocal.remove();
+                                    }
+                                    ```
 
                 + 引用队列
                     +
